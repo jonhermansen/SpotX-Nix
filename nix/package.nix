@@ -1,6 +1,7 @@
 {
   lib,
   bash,
+  cctools,
   coreutils,
   findutils,
   gnugrep,
@@ -61,6 +62,7 @@ spotify.overrideAttrs (old: {
       zip
     ]
     ++ lib.optionals isDarwin [
+      cctools
       DarwinTools
       rcodesign
       system_cmds
@@ -83,7 +85,8 @@ spotify.overrideAttrs (old: {
       chmod -R u+w "$out/Applications/Spotify.app"
 
       substituteInPlace "$NIX_BUILD_TOP/spotx.sh" \
-        --replace-fail /usr/bin/xattr true
+        --replace-fail /usr/bin/xattr true \
+        --replace-fail /usr/bin/lipo ${lib.getExe' cctools "lipo"}
     ''
     + ''
       ${lib.getExe bash} "$NIX_BUILD_TOP/spotx.sh" -P "${clientPath}" \
