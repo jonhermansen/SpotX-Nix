@@ -6,6 +6,7 @@
   findutils,
   gnugrep,
   gnused,
+  makeBinaryWrapper,
   perl,
   spotify,
   unzip,
@@ -64,6 +65,7 @@ spotify.overrideAttrs (old: {
     ++ lib.optionals isDarwin [
       cctools
       DarwinTools
+      makeBinaryWrapper
       rcodesign
       system_cmds
     ];
@@ -99,6 +101,18 @@ spotify.overrideAttrs (old: {
   postFixup =
     (old.postFixup or "")
     + lib.optionalString isDarwin ''
+      # Wrap the Spotify binary so every launch includes --allow-upgrades=0,
+      # a flag the native binary parses to skip the desktop auto-update
+      # subsystem (strings: "Handling force-auto-update argument",
+      # "Can't decode auto update parameters"). This stops the periodic
+      # update poll that would otherwise raise the
+      # AuthorizationExecuteWithPrivileges dialog and let Spotify swap the
+      # SpotX-patched bundle for a vanilla download.
+      chmod -R u+w "$out/Applications/Spotify.app/Contents/MacOS"
+      mv "${clientBinary}" "${clientBinary}-real"
+      makeBinaryWrapper "${clientBinary}-real" "${clientBinary}" \
+        --add-flags "--allow-upgrades=0"
+
       ${lib.getExe rcodesign} sign "$out/Applications/Spotify.app"
     '';
 
