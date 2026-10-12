@@ -2,6 +2,7 @@
   lib,
   bash,
   coreutils,
+  file,
   findutils,
   gnugrep,
   gnused,
@@ -37,6 +38,11 @@ let
   clientBinary = if isDarwin then "${clientRoot}/MacOS/Spotify" else "${clientRoot}/spotify";
   xpuiPath = if isDarwin then "${clientRoot}/Resources/Apps" else "${clientRoot}/Apps";
   platformArgs = lib.optionals isDarwin [
+    # -B enables SpotX-Bash's blockUpdates patch, which NUL-corrupts the
+    # desktop-update/v2/update URL string in the Spotify Mach-O so the
+    # native HTTP update poll goes to a bogus endpoint and 404s. The
+    # patch exists upstream but only runs when this flag is set.
+    "-B"
     "-S"
     "-F"
     spotify.version
@@ -62,6 +68,7 @@ spotify.overrideAttrs (old: {
     ]
     ++ lib.optionals isDarwin [
       DarwinTools
+      file
       rcodesign
       system_cmds
     ];
@@ -82,8 +89,19 @@ spotify.overrideAttrs (old: {
     + lib.optionalString isDarwin ''
       chmod -R u+w "$out/Applications/Spotify.app"
 
+      # /usr/bin/xattr → true: clearing extended attributes is a
+      # macOS-quarantine escape with no equivalent in the Nix sandbox.
+      # /usr/bin/file + /usr/bin/tr → nixpkgs equivalents for arch
+      # detection. nixpkgs `file` reports Mach-O arch BEFORE the word
+      # "executable" (and with trailing flags), whereas Apple's `file`
+      # reports it AFTER with no flags, so the case patterns in
+      # macos_client_arch() are rewritten to match the nixpkgs format.
       substituteInPlace "$NIX_BUILD_TOP/spotx.sh" \
-        --replace-fail /usr/bin/xattr true
+        --replace-fail /usr/bin/xattr true \
+        --replace-fail /usr/bin/file ${lib.getExe file} \
+        --replace-fail /usr/bin/tr ${lib.getExe' coreutils "tr"} \
+        --replace-fail '"mach-o 64-bit executable arm64")' '"mach-o 64-bit arm64 executable"*)' \
+        --replace-fail '"mach-o 64-bit executable x86_64")' '"mach-o 64-bit x86_64 executable"*)'
     ''
     + ''
       ${lib.getExe bash} "$NIX_BUILD_TOP/spotx.sh" -P "${clientPath}" \
